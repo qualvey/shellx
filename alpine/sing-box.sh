@@ -12,7 +12,7 @@ sing_box_url="https://github.com/SagerNet/sing-box/releases/download/${version}/
 nexttrace=nexttrace-tiny_linux_amd64
 nexttrace_url="https://github.com/nxtrace/NTrace-core/releases/download/v1.7.1/$nexttrace"
 
-read -p "What port used for Shadowsocks" PORT
+read -p "What port used for Shadowsocks: " PORT
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -93,3 +93,4 @@ cat >/etc/sing-box/config.json <<EOF
 EOF
 chmod +x /etc/init.d/sing-box
 rc-update add sing-box default
+rc-service sing-box start
