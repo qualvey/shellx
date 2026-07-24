@@ -12,6 +12,7 @@ sing_box_url="https://github.com/SagerNet/sing-box/releases/download/${version}/
 nexttrace=nexttrace-tiny_linux_amd64
 nexttrace_url="https://github.com/nxtrace/NTrace-core/releases/download/v1.7.1/$nexttrace"
 
+read -p "What port used for Shadowsocks" PORT
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -70,6 +71,25 @@ depend() {
     after network-online
 }
 EOF
+cat >/etc/sing-box/config.json <<EOF
 
+{
+  "log": {
+      "timestamp": true,
+      "output": "box.log",
+      "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "::",
+      "listen_port": $PORT,
+      "method": "chacha20-ietf-poly1305",
+      "password": "8JCsPssfgS8tiRwiMlhARg=="
+    }
+  ]
+}
+EOF
 chmod +x /etc/init.d/sing-box
 rc-update add sing-box default
