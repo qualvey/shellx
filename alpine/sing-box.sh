@@ -58,7 +58,7 @@ cat >/etc/init.d/sing-box <<'EOF'
 
 name="sing-box"
 description="sing-box service"
-
+supervisor="supervise-daemon"
 command="/usr/bin/sing-box"
 command_args="-D /var/lib/sing-box -C /etc/sing-box run"
 command_background=true
