@@ -95,8 +95,8 @@ if [ ! -f /etc/xray/config.json ]; then
   fi
 
   KEYPAIR=$(/usr/local/bin/xray x25519 2>/dev/null || true)
-  GEN_PRIVATE_KEY=$(echo "$KEYPAIR" | awk -F': ' '/Private key/{print $2}' | tr -d ' \r\n')
-  GEN_PUBLIC_KEY=$(echo "$KEYPAIR" | awk -F': ' '/Public key/{print $2}' | tr -d ' \r\n')
+  PRIVATE_KEY=$(echo "$KEYPAIR" | sed -n -e 's/.*Private[kK]ey: *\([^ ]*\).*/\1/p' -e 's/.*Private key: *\([^ ]*\).*/\1/p' | head -n1)
+  PUBLIC_KEY=$(echo "$KEYPAIR" | sed -n -e 's/.*Password (PublicKey): *\([^ ]*\).*/\1/p' -e 's/.*Public[kK]ey: *\([^ ]*\).*/\1/p' -e 's/.*Public key: *\([^ ]*\).*/\1/p' | head -n1)
 
   if [ -t 0 ]; then
     echo "=========================================="
@@ -123,17 +123,12 @@ if [ ! -f /etc/xray/config.json ]; then
     if [ -n "$PRIVATE_KEY_INPUT" ]; then
       PRIVATE_KEY="$PRIVATE_KEY_INPUT"
       read -p "请输入对应的 Public Key: " PUBLIC_KEY
-    else
-      PRIVATE_KEY="$GEN_PRIVATE_KEY"
-      PUBLIC_KEY="$GEN_PUBLIC_KEY"
     fi
   else
     PORT=443
     UUID="$GEN_UUID"
     TARGET="www.apple.com"
     REALITY_DOMAIN="www.apple.com"
-    PRIVATE_KEY="$GEN_PRIVATE_KEY"
-    PUBLIC_KEY="$GEN_PUBLIC_KEY"
   fi
 
   case "$TARGET" in
