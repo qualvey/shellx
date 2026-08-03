@@ -4,15 +4,44 @@ set -e
 
 version=v1.14.0-alpha.47
 name=${version#v}
-arch=linux-amd64-musl
+
+arch_raw=$(uname -m)
+case "$arch_raw" in
+  x86_64)  arch=linux-amd64-musl ;;
+  aarch64) arch=linux-arm64-musl ;;
+  *)       arch=linux-amd64-musl ;;
+esac
+
 target="sing-box-${name}-${arch}.tar.gz"
 folder="${target%.tar.gz}"
 sing_box_url="https://github.com/SagerNet/sing-box/releases/download/${version}/${target}"
 
-nexttrace=nexttrace-tiny_linux_amd64
+case "$arch_raw" in
+  x86_64)  nexttrace=nexttrace-tiny_linux_amd64 ;;
+  aarch64) nexttrace=nexttrace-tiny_linux_arm64 ;;
+  *)       nexttrace=nexttrace-tiny_linux_amd64 ;;
+esac
 nexttrace_url="https://github.com/nxtrace/NTrace-core/releases/download/v1.7.1/$nexttrace"
 
-read -p "What port used for Shadowsocks: " PORT
+# sudo 自动检测
+if command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
+
+PORT=8388
+if [ -t 0 ]; then
+  read -p "What port used for Shadowsocks (default: 8388): " PORT_INPUT
+  if [ -n "$PORT_INPUT" ]; then PORT=$PORT_INPUT; fi
+fi
+
+# 随机生成安全密码
+PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
+if [ -z "$PASSWORD" ]; then
+  PASSWORD="SecretPass8JCsPssfgS"
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -28,6 +57,7 @@ if wait $p1; then
   echo "sing-box download ok"
 else
   echo "sing-box download failed"
+  exit 1
 fi
 
 if wait $p2; then
@@ -37,23 +67,23 @@ else
 fi
 tar -xf "$target"
 
-install -m 755 "$folder/sing-box" /usr/bin/sing-box &
+$SUDO install -m 755 "$folder/sing-box" /usr/bin/sing-box &
 p3=$!
 
-install -m 755 "$nexttrace" /usr/bin/nexttrace &
-p4=$!
+if [ -f "$nexttrace" ]; then
+  $SUDO install -m 755 "$nexttrace" /usr/bin/nexttrace &
+  p4=$!
+  wait $p4 2>/dev/null || true
+fi
 
 wait $p3
-wait $p4
-rm -rf "$target" "$folder"
-rm -rf "$nexttrace"
+rm -rf "$target" "$folder" "$nexttrace"
 
-mkdir -p /etc/sing-box
-mkdir -p /var/lib/sing-box
-touch /etc/init.d/sing-box
+$SUDO mkdir -p /etc/sing-box
+$SUDO mkdir -p /var/lib/sing-box
+$SUDO touch /etc/init.d/sing-box
 
-#单引号禁止展开变量
-cat >/etc/init.d/sing-box <<'EOF'
+cat <<EOF | $SUDO tee /etc/init.d/sing-box >/dev/null
 #!/sbin/openrc-run
 
 name="sing-box"
@@ -62,7 +92,7 @@ supervisor="supervise-daemon"
 command="/usr/bin/sing-box"
 command_args="-D /var/lib/sing-box -C /etc/sing-box run"
 command_background=true
-pidfile="/run/${RC_SVCNAME}.pid"
+pidfile="/run/\${RC_SVCNAME}.pid"
 directory="/var/lib/sing-box"
 respawn_delay=2
 
@@ -71,8 +101,8 @@ depend() {
     after network-online
 }
 EOF
-cat >/etc/sing-box/config.json <<EOF
 
+cat <<EOF | $SUDO tee /etc/sing-box/config.json >/dev/null
 {
   "log": {
       "timestamp": true,
@@ -86,11 +116,20 @@ cat >/etc/sing-box/config.json <<EOF
       "listen": "::",
       "listen_port": $PORT,
       "method": "chacha20-ietf-poly1305",
-      "password": "8JCsPssfgS8tiRwiMlhARg=="
+      "password": "$PASSWORD"
     }
   ]
 }
 EOF
-chmod +x /etc/init.d/sing-box
-rc-update add sing-box default
-rc-service sing-box start
+
+$SUDO chmod +x /etc/init.d/sing-box
+$SUDO rc-update add sing-box default 2>/dev/null || true
+$SUDO rc-service sing-box restart 2>/dev/null || $SUDO rc-service sing-box start 2>/dev/null || true
+
+echo "=========================================="
+echo "sing-box 安装与配置完成!"
+echo "Shadowsocks 端口: $PORT"
+echo "Shadowsocks 加密: chacha20-ietf-poly1305"
+echo "Shadowsocks 密码: $PASSWORD"
+echo "=========================================="
+
