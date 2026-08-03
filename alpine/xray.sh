@@ -13,7 +13,20 @@ if [ -n "$CURRENT_VERSION" ]; then
 
   if version_ge "$CURRENT_VERSION" $(echo "$version" | sed 's/^[vV]//'); then
     echo "验证通过：当前版本符合或高于预期。"
-    exit 0
+    REINSTALL=""
+    if [ -t 0 ]; then
+      read -p "是否继续重新安装/配置？[y/N]: " REINSTALL_INPUT
+      case "$REINSTALL_INPUT" in
+        [yY]|[yY][eE][sS]) REINSTALL="y" ;;
+        *) REINSTALL="n" ;;
+      esac
+    else
+      REINSTALL="n"
+    fi
+
+    if [ "$REINSTALL" != "y" ]; then
+      exit 0
+    fi
   fi
 else
   echo "提示：未检测到 Xray 安装，自动跳过版本检查（默认通过）。"
@@ -67,6 +80,13 @@ depend() {
 EOF
 
 SERVER_IP=$(curl -s4 --max-time 5 https://api.ipify.org || curl -s4 --max-time 5 https://ifconfig.me || wget -qO- -t 1 -T 5 https://api.ipify.org 2>/dev/null || echo "YOUR_SERVER_IP")
+
+if [ -f /etc/xray/config.json ] && [ -t 0 ]; then
+  read -p "检测到已有配置文件 /etc/xray/config.json，是否重新配置？[y/N]: " RECONF_INPUT
+  case "$RECONF_INPUT" in
+    [yY]|[yY][eE][sS]) $SUDO rm -f /etc/xray/config.json ;;
+  esac
+fi
 
 if [ ! -f /etc/xray/config.json ]; then
   GEN_UUID=$(/usr/local/bin/xray uuid 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || true)
