@@ -12,7 +12,7 @@ if [ -n "$CURRENT_VERSION" ]; then
   echo "预期最低版本: $version"
 
   if version_ge "$CURRENT_VERSION" $(echo "$version" | sed 's/^[vV]//'); then
-    echo "验证通过：当前版本符合或高于预期。"
+    echo "验证通过：当前版本符合或高于预期。==="
     REINSTALL=""
     if [ -t 0 ]; then
       read -p "是否继续重新安装/配置？[y/N]: " REINSTALL_INPUT
