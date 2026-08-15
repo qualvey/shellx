@@ -30,8 +30,6 @@ else
   SUDO=""
 fi
 
-
-
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -69,52 +67,132 @@ fi
 wait $p3
 rm -rf "$target" "$folder" "$nexttrace"
 
-PORT=8388
-if [ -t 0 ]; then
-  read -p "What port used for Shadowsocks (default: 8388): " PORT_INPUT
-  if [ -n "$PORT_INPUT" ]; then PORT=$PORT_INPUT; fi
+if command -v jq >/dev/null 2>&1; then
+  echo "jq is already installed"
+else
+  echo "Installing jq..."
+  $SUDO apk add jq
 fi
 
-TUIC_PORT=443
+BASIC='
+{
+  "log": {
+      "timestamp": true,
+      "output": "box.log",
+      "level": "info"
+  }
+}'
+
+
+SS_ENABLED=false
+TUIC_ENABLED=false
 
 if [ -t 0 ]; then
+  read -p "What port used for Shadowsocks (Leave empty to disable shadowsocks): " PORT_INPUT
+  if [ -n "$PORT_INPUT" ]; then PORT=$PORT_INPUT; SS_ENABLED=true; fi
+  read -p "Shadowsocks password (Leave empty to auto-generate): " PASSWORD
+  if [ -z "$PASSWORD" ]; then
+    PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
+    if [ -z "$PASSWORD" ]; then
+      PASSWORD="SecretPass8JCs"
+    fi
+  fi
+  PORT=$(echo "$PORT" | xargs)
+  PASSWORD=$(echo "$PASSWORD" | xargs)
+
+  CONFIG=$(echo "$BASIC" | jq \
+  --argjson port "$PORT" \
+  --arg password "$PASSWORD" \
+  '.inbounds+=[
+  {"type": "shadowsocks",
+   "tag": "ss-in",
+   "listen": "::",
+   "listen_port": $port,
+   "method": "chacha20-ietf-poly1305",
+   "password": "$password"
+    }
+  ]')
+fi
+
+read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
+ENABLE_TUIC=${ENABLE_TUIC:-y}
+
+if [ -t 0 ] && [ "${ENABLE_TUIC,,}" = "y" ]; then
+  # 1. 端口
   read -p "What port used for TUIC (default: 443): " TUIC_PORT_INPUT
-  if [ -n "$TUIC_PORT_INPUT" ]; then TUIC_PORT=$TUIC_PORT_INPUT; fi
-fi
-read -p "Enable TUIC? (y/N): " ENABLE_TUIC
-ENABLE_TUIC=${ENABLE_TUIC:-n}
+  TUIC_PORT=${TUIC_PORT_INPUT:-443}
 
-if [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; then
   read -p "tuic uuid (leave empty to auto-generate): " TUIC_UUID
   if [ -z "$TUIC_UUID" ]; then
-    if command -v uuidgen >/dev/null 2>&1; then
-      TUIC_UUID=$(uuidgen)
-    elif command -v sing-box >/dev/null 2>&1; then
-      TUIC_UUID=$(sing-box generate uuid )
-    elif [ -r /proc/sys/kernel/random/uuid ]; then
+    if command -v sing-box >/dev/null 2>&1; then
+      TUIC_UUID=$(sing-box generate uuid)
+    elif [ -f /proc/sys/kernel/random/uuid ]; then
       TUIC_UUID=$(cat /proc/sys/kernel/random/uuid)
-    elif command -v python3 >/dev/null 2>&1; then
-      TUIC_UUID=$(python3 -c 'import uuid;print(uuid.uuid4())')
-    elif command -v python >/dev/null 2>&1; then
-      TUIC_UUID=$(python -c 'import uuid;print(uuid.uuid4())')
     else
-      TUIC_UUID=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)
+      echo "Cannot generate UUID (sing-box not installed). Please specify manually."
+      exit 1
     fi
   fi
 
   read -p "tuic password (leave empty to auto-generate): " TUIC_PASSWORD
   if [ -z "$TUIC_PASSWORD" ]; then
-    TUIC_PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
-    if [ -z "$TUIC_PASSWORD" ]; then
-      TUIC_PASSWORD="SecretTUICPass8JCs"
-    fi
+    TUIC_PASSWORD=$(head -c 32 /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 16)
+    [ -z "$TUIC_PASSWORD" ] && TUIC_PASSWORD="SecretTUICPass8JCs"
   fi
-fi
 
-# 随机生成安全密码
-PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
-if [ -z "$PASSWORD" ]; then
-  PASSWORD="SecretPass8JCsPssfgS"
+
+  read -p "Domain for certificate (e.g. example.com): " DOMAIN
+  read -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN
+  if [ -z "$DOMAIN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "Error: Domain and Cloudflare API token are required."
+    exit 1
+  fi
+  #去除空格
+  TUIC_PORT=$(echo "$TUIC_PORT" | xargs)
+  TUIC_UUID=$(echo "$TUIC_UUID" | xargs)
+  TUIC_PASSWORD=$(echo "$TUIC_PASSWORD" | xargs)
+  DOMAIN=$(echo "$DOMAIN" | xargs)
+  CLOUDFLARE_API_TOKEN=$(echo "$CLOUDFLARE_API_TOKEN" | xargs)
+  # 5. 单次 jq 合并注入（同时追加 inbounds 与 certificate_providers）
+  CONFIG=$(echo "$CONFIG" | jq \
+    --argjson tuic_port "$TUIC_PORT" \
+    --arg tuic_uuid "$TUIC_UUID" \
+    --arg tuic_password "$TUIC_PASSWORD" \
+    --arg domain "$DOMAIN" \
+    --arg cf_token "$CLOUDFLARE_API_TOKEN" \
+    '
+    .inbounds += [{
+      "type": "tuic",
+      "tag": "tuic-in",
+      "listen": "::",
+      "listen_port": $tuic_port,
+      "congestion_control": "bbr",
+      "users": [
+        {
+          "name": "MainUser",
+          "uuid": $tuic_uuid,
+          "password": $tuic_password
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "alpn": ["h3"],
+        "certificate_provider": "letsencrypt"
+      }
+    }]
+    |
+    .certificate_providers = ((.certificate_providers // []) + [{
+      "type": "acme",
+      "tag": "letsencrypt",
+      "domain": [$domain],
+      "email": "wel@ryugo.org",
+      "provider": "letsencrypt",
+      "dns01_challenge": {
+        "provider": "cloudflare",
+        "api_token": $cf_token
+      }
+    }])
+    ')
 fi
 
 $SUDO mkdir -p /etc/sing-box
@@ -140,107 +218,7 @@ depend() {
 }
 EOF
 
-if [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; then
-  echo "TUIC enabled: Let's Encrypt certificate provider is required."
-  ENABLE_CERT=y
-  # require domain and api token (loop until provided)
-  while [ -z "$DOMAIN" ]; do
-    read -p "Domain(s) for certificate (enter JSON array items or a single quoted domain, e.g. \"\"example.com\"\" or \"\\\"example.com\\\"\"): " DOMAIN
-    if [ -z "$DOMAIN" ]; then
-      echo "Domain is required when TUIC is enabled."
-    fi
-  done
-  while [ -z "$CLOUDFLARE_API_TOKEN" ]; do
-    read -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN
-    if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-      echo "Cloudflare API token is required when TUIC is enabled."
-    fi
-  done
-else
-  read -p "Enable Let's Encrypt certificate provider? (y/N): " ENABLE_CERT
-  ENABLE_CERT=${ENABLE_CERT:-n}
-  if [ "$ENABLE_CERT" = "y" ] || [ "$ENABLE_CERT" = "Y" ]; then
-    read -p "Domain(s) for certificate (example: \"example.com\" or JSON array items): " DOMAIN
-    read -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN
-    if [ -z "$DOMAIN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-      echo "Domain or Cloudflare API token empty; disabling certificate provider."
-      ENABLE_CERT=n
-    fi
-  fi
-fi
-
-$SUDO tee /etc/sing-box/config.json >/dev/null <<EOF
-{
-  "log": {
-      "timestamp": true,
-      "output": "box.log",
-      "level": "info"
-  }
-EOF
-
-if [ "$ENABLE_CERT" = "y" ] || [ "$ENABLE_CERT" = "Y" ]; then
-  cat <<EOF | $SUDO tee -a /etc/sing-box/config.json >/dev/null
-  , "certificate_providers": [
-    {
-        "type": "acme",
-        "tag": "letsencrypt",
-        "domain": [
-            ${DOMAIN}
-        ],
-        "email": "mail@ryugo.org",
-        "provider": "letsencrypt",
-        "dns01_challenge": {
-            "provider": "cloudflare",
-            "api_token": "$CLOUDFLARE_API_TOKEN"
-        }
-    }
-  ]
-EOF
-fi
-
-cat <<EOF | $SUDO tee -a /etc/sing-box/config.json >/dev/null
-  , "inbounds": [
-    {
-      "type": "shadowsocks",
-      "tag": "ss-in",
-      "listen": "::",
-      "listen_port": $PORT,
-      "method": "chacha20-ietf-poly1305",
-      "password": "$PASSWORD"
-    }
-EOF
-
-if [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; then
-  cat <<EOF | $SUDO tee -a /etc/sing-box/config.json >/dev/null
-    ,
-    {
-    "type": "tuic",
-    "tag": "tuic-in",
-    "listen": "::",
-    "listen_port": $TUIC_PORT,
-    "congestion_control": "bbr",
-    "users": [
-        {
-            "name": "MainUser",
-            "uuid": "$TUIC_UUID",
-            "password": "$TUIC_PASSWORD"
-        }
-    ],
-    "tls": {
-        "enabled": true,
-        "alpn": [
-            "h3"
-        ],
-        "certificate_provider": "letsencrypt"
-    }
-}
-EOF
-fi
-
-$SUDO tee -a /etc/sing-box/config.json >/dev/null <<'EOF'
-  ]
-}
-EOF
+echo "$CONFIG" | jq . | $SUDO tee /etc/sing-box/config.json >/dev/null
 
 $SUDO chmod +x /etc/init.d/sing-box
 $SUDO rc-update add sing-box default 2>/dev/null || true
@@ -252,4 +230,3 @@ echo "Shadowsocks 端口: $PORT"
 echo "Shadowsocks 加密: chacha20-ietf-poly1305"
 echo "Shadowsocks 密码: $PASSWORD"
 echo "=========================================="
-
