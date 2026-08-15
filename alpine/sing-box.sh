@@ -74,16 +74,11 @@ else
   $SUDO apk add jq
 fi
 
-BASIC='
-{
-  "log": {
-      "timestamp": true,
-      "output": "box.log",
-      "level": "info"
-  }
-}'
-
-
+# 初始基础结构
+CONFIG=$(jq -n '{
+  log: { timestamp: true, output: "box.log", level: "info" },
+  inbounds: []
+}')
 SS_ENABLED=false
 TUIC_ENABLED=false
 
@@ -102,7 +97,7 @@ if [ -t 0 ]; then
     PORT=$(echo "$PORT" | xargs)
     PASSWORD=$(echo "$PASSWORD" | xargs)
 
-    CONFIG=$(echo "$BASIC" | jq \
+    CONFIG=$(echo "$CONFIG" | jq \
     --argjson port "$PORT" \
     --arg password "$PASSWORD" \
     '.inbounds+=[
