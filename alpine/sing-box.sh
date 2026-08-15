@@ -122,7 +122,7 @@ fi
 read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
 ENABLE_TUIC=${ENABLE_TUIC:-y}
 
-if [ -t 0 ] && [ "${ENABLE_TUIC,,}" = "y" ]; then
+if [ -t 0 ] && { [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; }; then
   # 1. 端口
   read -p "What port used for TUIC (default: 443): " TUIC_PORT_INPUT
   TUIC_PORT=${TUIC_PORT_INPUT:-443}
