@@ -90,28 +90,33 @@ TUIC_ENABLED=false
 if [ -t 0 ]; then
   read -p "What port used for Shadowsocks (Leave empty to disable shadowsocks): " PORT_INPUT
   if [ -n "$PORT_INPUT" ]; then PORT=$PORT_INPUT; SS_ENABLED=true; fi
-  read -p "Shadowsocks password (Leave empty to auto-generate): " PASSWORD
-  if [ -z "$PASSWORD" ]; then
-    PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
+  if [ "$SS_ENABLED" = true ]; then
+    echo "Shadowsocks will be enabled on port $PORT"
+    read -p "Shadowsocks password (Leave empty to auto-generate): " PASSWORD
     if [ -z "$PASSWORD" ]; then
-      PASSWORD="SecretPass8JCs"
+      PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
+      if [ -z "$PASSWORD" ]; then
+        PASSWORD="SecretPass8JCs"
+      fi
     fi
-  fi
-  PORT=$(echo "$PORT" | xargs)
-  PASSWORD=$(echo "$PASSWORD" | xargs)
+    PORT=$(echo "$PORT" | xargs)
+    PASSWORD=$(echo "$PASSWORD" | xargs)
 
-  CONFIG=$(echo "$BASIC" | jq \
-  --argjson port "$PORT" \
-  --arg password "$PASSWORD" \
-  '.inbounds+=[
-  {"type": "shadowsocks",
-   "tag": "ss-in",
-   "listen": "::",
-   "listen_port": $port,
-   "method": "chacha20-ietf-poly1305",
-   "password": "$password"
-    }
-  ]')
+    CONFIG=$(echo "$BASIC" | jq \
+    --argjson port "$PORT" \
+    --arg password "$PASSWORD" \
+    '.inbounds+=[
+    {"type": "shadowsocks",
+    "tag": "ss-in",
+    "listen": "::",
+    "listen_port": $port,
+    "method": "chacha20-ietf-poly1305",
+    "password": "$password"
+      }
+    ]')
+  else
+    echo "Shadowsocks will be disabled"
+  fi
 fi
 
 read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
