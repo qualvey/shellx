@@ -106,7 +106,7 @@ if [ -t 0 ]; then
     "listen": "::",
     "listen_port": $port,
     "method": "chacha20-ietf-poly1305",
-    "password": "$password"
+    "password": $password
       }
     ]')
   else
