@@ -224,9 +224,23 @@ $SUDO chmod +x /etc/init.d/sing-box
 $SUDO rc-update add sing-box default 2>/dev/null || true
 $SUDO rc-service sing-box restart 2>/dev/null || $SUDO rc-service sing-box start 2>/dev/null || true
 
+if [ "$SS_ENABLED" = true ]; then
 echo "=========================================="
 echo "sing-box 安装与配置完成!"
 echo "Shadowsocks 端口: $PORT"
 echo "Shadowsocks 加密: chacha20-ietf-poly1305"
 echo "Shadowsocks 密码: $PASSWORD"
 echo "=========================================="
+fi
+
+if [ "$TUIC_ENABLED" = true];then 
+echo "=========================================="
+echo "tuic如下"
+echo "端口 : $TUIC_PORT" 
+echo "uuid: $TUIC_UUID" 
+echo "password: $TUIC_PASSWORD" 
+echo "SNI : $DOMAIN"
+echo "=========================================="
+fi
+
+
