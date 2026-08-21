@@ -118,6 +118,7 @@ read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
 ENABLE_TUIC=${ENABLE_TUIC:-y}
 
 if [ -t 0 ] && { [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; }; then
+  TUIC_ENABLED=true
   # 1. 端口
   read -p "What port used for TUIC (default: 443): " TUIC_PORT_INPUT
   TUIC_PORT=${TUIC_PORT_INPUT:-443}
@@ -233,7 +234,7 @@ echo "Shadowsocks 密码: $PASSWORD"
 echo "=========================================="
 fi
 
-if [ "$TUIC_ENABLED" = true];then 
+if [ "$TUIC_ENABLED" = true ]; then
 echo "=========================================="
 echo "tuic如下"
 echo "端口 : $TUIC_PORT" 
