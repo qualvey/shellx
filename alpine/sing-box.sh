@@ -4,6 +4,16 @@ set -eu
 
 version=v1.14.0-alpha.47
 name=${version#v}
+# sudo 自动检测
+if command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
+DEPENDENCIES=("curl" "jq")
+
+ALL_DEPS_INSTALLED=true
+MISSED_COMMAND=()
 
 arch_raw=$(uname -m)
 case "$arch_raw" in
@@ -11,24 +21,22 @@ case "$arch_raw" in
   aarch64) arch=linux-arm64-musl ;;
   *)       arch=linux-amd64-musl ;;
 esac
-
-target="sing-box-${name}-${arch}.tar.gz"
-folder="${target%.tar.gz}"
-sing_box_url="https://github.com/SagerNet/sing-box/releases/download/${version}/${target}"
-
 case "$arch_raw" in
   x86_64)  nexttrace=nexttrace-tiny_linux_amd64 ;;
   aarch64) nexttrace=nexttrace-tiny_linux_arm64 ;;
   *)       nexttrace=nexttrace-tiny_linux_amd64 ;;
 esac
-nexttrace_url="https://github.com/nxtrace/NTrace-core/releases/download/v1.7.1/$nexttrace"
 
-# sudo 自动检测
-if command -v sudo >/dev/null 2>&1; then
-  SUDO="sudo"
-else
-  SUDO=""
-fi
+for cmd in "${DEPENDENCIES[@]}"; do 
+    if command -v "$cmd" >/dev/null 2>&1; then
+        echo "$cmd was installed"
+    else
+        echo "miss $cmd"
+        ALL_DEPS_INSTALLED=false
+        MISSED_COMMAND+=("$cmd")
+    fi
+done 
+
 # 退出或收到中断信号时，终止所有后台子任务
 cleanup() {
   # 忽略后续信号避免重复触发，向整个进程组发送 SIGTERM
@@ -36,51 +44,68 @@ cleanup() {
   kill 0 2>/dev/null
 }
 trap cleanup SIGINT SIGTERM EXIT
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 
-cd "$tmp"
-echo "Downloading $sing_box_url"
+install_curl() {
+  echo "installing  curl"
+  apk add curl
+}
 
-wget "$sing_box_url" -O "$target" &
-p1=$!
-wget "$nexttrace_url" -O "$nexttrace" &
-p2=$!
+install_sing_box() {
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
 
-if wait $p1; then
+  cd "$tmp"
+
+  target="sing-box-${name}-${arch}.tar.gz"
+  folder="${target%.tar.gz}"
+  sing_box_url="https://github.com/SagerNet/sing-box/releases/download/${version}/${target}"
+  echo "Downloading $sing_box_url"
+
+  wget "$sing_box_url" -O "$target" &
+  p1=$!
+  if wait $p1; then
   echo "sing-box download ok"
-else
-  echo "sing-box download failed"
-  exit 1
-fi
+  else
+    echo "sing-box download failed"
+    exit 1
+  fi
 
-if wait $p2; then
-  echo "nexttrace download ok"
-else
-  echo "nexttrace download failed"
-fi
-tar -xf "$target"
+  tar -xf "$target"
 
-$SUDO install -m 755 "$folder/sing-box" /usr/bin/sing-box &
-p3=$!
+  $SUDO install -m 755 "$folder/sing-box" /usr/bin/sing-box &
+  p3=$!
+  wait $p3
+  rm -rf "$target" "$folder"
 
-if [ -f "$nexttrace" ]; then
-  $SUDO install -m 755 "$nexttrace" /usr/bin/nexttrace &
-  p4=$!
-  wait $p4 2>/dev/null || true
-fi
+  $SUDO mkdir -p /etc/sing-box
+  $SUDO mkdir -p /var/lib/sing-box
+  $SUDO touch /etc/init.d/sing-box
 
-wait $p3
-rm -rf "$target" "$folder" "$nexttrace"
+  cat <<EOF | $SUDO tee /etc/init.d/sing-box >/dev/null
+#!/sbin/openrc-run
 
-if command -v jq >/dev/null 2>&1; then
-  echo "jq is already installed"
-else
-  echo "Installing jq..."
-  $SUDO apk add jq
-fi
+name="sing-box"
+description="sing-box service"
+supervisor="supervise-daemon"
+command="/usr/bin/sing-box"
+command_args="-D /var/lib/sing-box -C /etc/sing-box run"
+command_background=true
+pidfile="/run/\${RC_SVCNAME}.pid"
+directory="/var/lib/sing-box"
+respawn_delay=2
 
-# 初始基础结构
+depend() {
+    need net
+    after network-online
+}
+EOF
+
+  echo "$CONFIG" | jq . | $SUDO tee /etc/sing-box/config.json >/dev/null
+
+  $SUDO chmod +x /etc/init.d/sing-box
+  $SUDO rc-update add sing-box default 2>/dev/null || true
+
+  # 初始基础结构
 CONFIG=$(jq -n '{
   log: { timestamp: true, output: "box.log", level: "info" },
   inbounds: []
@@ -201,34 +226,48 @@ if [ -t 0 ] && { [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; }; then
     }])
     ')
 fi
-
-$SUDO mkdir -p /etc/sing-box
-$SUDO mkdir -p /var/lib/sing-box
-$SUDO touch /etc/init.d/sing-box
-
-cat <<EOF | $SUDO tee /etc/init.d/sing-box >/dev/null
-#!/sbin/openrc-run
-
-name="sing-box"
-description="sing-box service"
-supervisor="supervise-daemon"
-command="/usr/bin/sing-box"
-command_args="-D /var/lib/sing-box -C /etc/sing-box run"
-command_background=true
-pidfile="/run/\${RC_SVCNAME}.pid"
-directory="/var/lib/sing-box"
-respawn_delay=2
-
-depend() {
-    need net
-    after network-online
 }
-EOF
 
-echo "$CONFIG" | jq . | $SUDO tee /etc/sing-box/config.json >/dev/null
+install_nexttrace() {
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
 
-$SUDO chmod +x /etc/init.d/sing-box
-$SUDO rc-update add sing-box default 2>/dev/null || true
+  cd "$tmp"
+  nexttrace_url="https://github.com/nxtrace/NTrace-core/releases/download/v1.7.1/$nexttrace"
+  wget "$nexttrace_url" -O "$nexttrace" &
+  p2=$!
+
+  if wait $p2; then
+    echo "nexttrace download ok"
+  else
+    echo "nexttrace download failed"
+  fi
+
+  if [ -f "$nexttrace" ]; then
+    $SUDO install -m 755 "$nexttrace" /usr/bin/nexttrace &
+    p4=$!
+    wait $p4 2>/dev/null || true
+  fi
+  rm -rf $nexttrace
+
+}
+
+install_jq() {
+  $SUOD apk add jq
+}
+
+for dep in "$MISSED_DEPS[@]"; do 
+    fn="install_${dep}"
+
+  if declare -f "$fn" >/dev/null 2>&1; then
+    "$fn"
+  else
+    echo "-->> warn: func "$fn" not declared"
+  fi
+done
+
+install_sing_box
+
 $SUDO rc-service sing-box restart 2>/dev/null || $SUDO rc-service sing-box start 2>/dev/null || true
 
 if [ "$SS_ENABLED" = true ]; then
@@ -249,5 +288,3 @@ echo "password: $TUIC_PASSWORD"
 echo "SNI : $DOMAIN"
 echo "=========================================="
 fi
-
-
