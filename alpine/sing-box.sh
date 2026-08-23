@@ -10,7 +10,7 @@ if command -v sudo >/dev/null 2>&1; then
 else
   SUDO=""
 fi
-DEPENDENCIES=("curl" "jq")
+DEPENDENCIES="curl jq"
 
 ALL_DEPS_INSTALLED=true
 MISSED_COMMAND=()
