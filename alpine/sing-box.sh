@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -e
+set -eu
 
 version=v1.14.0-alpha.47
 name=${version#v}
@@ -29,7 +29,13 @@ if command -v sudo >/dev/null 2>&1; then
 else
   SUDO=""
 fi
-
+# 退出或收到中断信号时，终止所有后台子任务
+cleanup() {
+  # 忽略后续信号避免重复触发，向整个进程组发送 SIGTERM
+  trap - SIGINT SIGTERM EXIT
+  kill 0 2>/dev/null
+}
+trap cleanup SIGINT SIGTERM EXIT
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -113,6 +119,9 @@ if [ -t 0 ]; then
     echo "Shadowsocks will be disabled"
   fi
 fi
+
+
+socks5
 
 read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
 ENABLE_TUIC=${ENABLE_TUIC:-y}
