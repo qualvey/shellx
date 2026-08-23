@@ -120,9 +120,6 @@ if [ -t 0 ]; then
   fi
 fi
 
-
-socks5
-
 read -p "Enable TUIC? (Y/n): " ENABLE_TUIC
 ENABLE_TUIC=${ENABLE_TUIC:-y}
 
