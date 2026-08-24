@@ -27,7 +27,7 @@ case "$arch_raw" in
   *)       nexttrace=nexttrace-tiny_linux_amd64 ;;
 esac
 
-for cmd in "${DEPENDENCIES[@]}"; do 
+for cmd in $DEPENDENCIES; do 
     if command -v "$cmd" >/dev/null 2>&1; then
         echo "$cmd was installed"
     else
@@ -256,7 +256,7 @@ install_jq() {
   $SUOD apk add jq
 }
 
-for dep in "$MISSED_DEPS[@]"; do 
+for dep in $MISSED_DEPS; do 
     fn="install_${dep}"
 
   if declare -f "$fn" >/dev/null 2>&1; then
