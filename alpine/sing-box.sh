@@ -33,7 +33,7 @@ for cmd in $DEPENDENCIES; do
     else
         echo "miss $cmd"
         ALL_DEPS_INSTALLED=false
-        MISSED_DEPS="$MISSED_DEPS $cmd"
+        MISSED_DEPS="${MISSED_DEPS:-} $cmd"
     fi
 done 
 
