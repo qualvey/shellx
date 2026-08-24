@@ -13,7 +13,7 @@ fi
 DEPENDENCIES="curl jq"
 
 ALL_DEPS_INSTALLED=true
-MISSED_DEPSS=""
+MISSED_DEPS=""
 
 arch_raw=$(uname -m)
 case "$arch_raw" in
