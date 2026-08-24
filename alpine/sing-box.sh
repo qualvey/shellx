@@ -13,7 +13,7 @@ fi
 DEPENDENCIES="curl jq"
 
 ALL_DEPS_INSTALLED=true
-MISSED_COMMAND=()
+MISSED_COMMAND=""
 
 arch_raw=$(uname -m)
 case "$arch_raw" in
@@ -33,7 +33,7 @@ for cmd in "${DEPENDENCIES[@]}"; do
     else
         echo "miss $cmd"
         ALL_DEPS_INSTALLED=false
-        MISSED_COMMAND+=("$cmd")
+        MISSED_COMMAND="$MISSED_COMMAND $cmd"
     fi
 done 
 
