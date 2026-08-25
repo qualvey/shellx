@@ -51,6 +51,11 @@ install_curl() {
 }
 
 install_sing_box() {
+    # 初始基础结构
+  CONFIG=$(jq -n '{
+    log: { timestamp: true, output: "box.log", level: "info" },
+    inbounds: []
+  }')
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
 
@@ -105,11 +110,7 @@ EOF
   $SUDO chmod +x /etc/init.d/sing-box
   $SUDO rc-update add sing-box default 2>/dev/null || true
 
-  # 初始基础结构
-CONFIG=$(jq -n '{
-  log: { timestamp: true, output: "box.log", level: "info" },
-  inbounds: []
-}')
+
 SS_ENABLED=false
 TUIC_ENABLED=false
 
@@ -259,10 +260,10 @@ install_jq() {
 for dep in $MISSED_DEPS; do 
     fn="install_${dep}"
 
-  if declare -f "$fn" >/dev/null 2>&1; then
-    "$fn"
+  if command -v "$fn" >/dev/null 2>&1; then
+      "$fn"
   else
-    echo "-->> warn: func "$fn" not declared"
+      echo "-->> warn: func $fn not declared"
   fi
 done
 
