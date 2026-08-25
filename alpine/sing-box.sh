@@ -4,6 +4,7 @@ set -eu
 
 version=v1.14.0-alpha.47
 name=${version#v}
+
 # sudo 自动检测
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
@@ -254,7 +255,7 @@ install_nexttrace() {
 }
 
 install_jq() {
-  $SUOD apk add jq
+  $SUDO apk add jq
 }
 
 for dep in $MISSED_DEPS; do 
