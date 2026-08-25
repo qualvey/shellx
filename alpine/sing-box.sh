@@ -81,6 +81,7 @@ install_sing_box() {
   $SUDO install -m 755 "$folder/sing-box" /usr/bin/sing-box &
   p3=$!
   wait $p3
+
   rm -rf "$target" "$folder"
 
   $SUDO mkdir -p /etc/sing-box
@@ -105,12 +106,6 @@ depend() {
     after network-online
 }
 EOF
-
-  echo "$CONFIG" | jq . | $SUDO tee /etc/sing-box/config.json >/dev/null
-
-  $SUDO chmod +x /etc/init.d/sing-box
-  $SUDO rc-update add sing-box default 2>/dev/null || true
-
 
 SS_ENABLED=false
 TUIC_ENABLED=false
@@ -228,6 +223,10 @@ if [ -t 0 ] && { [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; }; then
     }])
     ')
 fi
+echo "$CONFIG" | jq . | $SUDO tee /etc/sing-box/config.json >/dev/null
+
+$SUDO chmod +x /etc/init.d/sing-box
+$SUDO rc-update add sing-box default 2>/dev/null || true
 }
 
 install_nexttrace() {
