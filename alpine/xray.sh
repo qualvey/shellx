@@ -78,8 +78,11 @@ configure() {
   if [ ! -f /etc/xray/config.json ]; then
     GEN_UUID=$(/usr/local/bin/xray uuid 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "c2f9d863-8a3c-4e8a-9f12-0b1a2c3d4e5f")
     KEYPAIR=$(/usr/local/bin/xray x25519 2>/dev/null || true)
-    PRIVATE_KEY=$(echo "$KEYPAIR" | awk -F': ' '/[Pp]rivate [Kk]ey/ {print $2}' | tr -d ' \r\n')
-    PUBLIC_KEY=$(echo "$KEYPAIR" | awk -F': ' '/[Pp]ublic [Kk]ey|Password \(PublicKey\)/ {print $2}' | tr -d ' \r\n')
+  # 提取 Private Key
+  PRIVATE_KEY=$(echo "$KEYPAIR" | awk '{for(i=1;i<=NF;i++) if($i=="PrivateKey:") print $(i+1)}')
+
+  # 提取 Public Key
+  PUBLIC_KEY=$(echo "$KEYPAIR" | awk '{for(i=1;i<=NF;i++) if($i=="(PublicKey):") print $(i+1)}')
 
     if [ -t 0 ]; then
       echo "=========================================="
