@@ -9,7 +9,7 @@ else
   SUDO=""
 fi
 
-install() {
+install_xray() {
   arch_raw=$(uname -m)
   case "$arch_raw" in
     x86_64) zip_arch="64" ;;
@@ -34,7 +34,8 @@ install() {
 
   $SUDO install -m 755 xray /usr/local/bin/xray
   $SUDO mkdir -p /etc/xray /var/log/xray
-
+  cd /
+  rm -rf "$tmp"
   cat <<'EOF' | $SUDO tee /etc/init.d/xray >/dev/null
 #!/sbin/openrc-run
 
@@ -194,7 +195,7 @@ main() {
     if [ -t 0 ]; then
       read -p "检测到已安装 Xray，是否重新安装/更新？[y/N]: " INSTALL_INPUT
       case "$INSTALL_INPUT" in
-        [yY]|[yY][eE][sS]) install ;;
+        [yY]|[yY][eE][sS]) install_xray ;;
         *) ;;
       esac
 
@@ -210,7 +211,7 @@ main() {
   fi
 
   echo "未检测到 Xray，开始安装..."
-  install
+  install_xray
   configure
 }
 
