@@ -89,26 +89,34 @@ configure() {
       echo "           配置 Xray VLESS REALITY        "
       echo "=========================================="
 
-      read -p "请输入服务端口 PORT [默认 443]: " PORT_INPUT
-      PORT=${PORT_INPUT:-443}
+      read -p "请输入服务端口 PORT [默认 443，输入 n 禁用 VLESS]: " PORT_INPUT
+      PORT_INPUT=$(echo "$PORT_INPUT" | xargs)
+      if [ "$PORT_INPUT" = "n" ] || [ "$PORT_INPUT" = "N" ]; then
+        VLESS_ENABLED=false
+        PORT=""
+        echo "VLESS 已禁用。"
+      else
+        VLESS_ENABLED=true
+        PORT=${PORT_INPUT:-443}
 
-      read -p "请输入 UUID [默认: $GEN_UUID]: " UUID_INPUT
-      UUID=${UUID_INPUT:-$GEN_UUID}
+        read -p "请输入 UUID [默认: $GEN_UUID]: " UUID_INPUT
+        UUID=${UUID_INPUT:-$GEN_UUID}
 
-      TARGET=""
-      while [ -z "$TARGET" ]; do
-        read -p "请输入 TARGET 目标域名/IP (如 www.apple.com): " TARGET
-      done
+        TARGET=""
+        while [ -z "$TARGET" ]; do
+          read -p "请输入 TARGET 目标域名/IP (如 www.apple.com): " TARGET
+        done
 
-      REALITY_DOMAIN=""
-      while [ -z "$REALITY_DOMAIN" ]; do
-        read -p "请输入 REALITY 伪装域名 (如 www.apple.com): " REALITY_DOMAIN
-      done
+        REALITY_DOMAIN=""
+        while [ -z "$REALITY_DOMAIN" ]; do
+          read -p "请输入 REALITY 伪装域名 (如 www.apple.com): " REALITY_DOMAIN
+        done
 
-      read -p "请输入 Private Key [默认自动生成]: " PRIVATE_KEY_INPUT
-      if [ -n "$PRIVATE_KEY_INPUT" ]; then
-        PRIVATE_KEY="$PRIVATE_KEY_INPUT"
-        read -p "请输入对应的 Public Key: " PUBLIC_KEY
+        read -p "请输入 Private Key [默认自动生成]: " PRIVATE_KEY_INPUT
+        if [ -n "$PRIVATE_KEY_INPUT" ]; then
+          PRIVATE_KEY="$PRIVATE_KEY_INPUT"
+          read -p "请输入对应的 Public Key: " PUBLIC_KEY
+        fi
       fi
 
       read -p "请输入 Shadowsocks 服务端口（留空禁用）: " SS_PORT_INPUT
@@ -125,21 +133,49 @@ configure() {
       fi
     else
       PORT=443
+      VLESS_ENABLED=true
       UUID="$GEN_UUID"
       TARGET="www.apple.com"
       REALITY_DOMAIN="www.apple.com"
       SS_ENABLED=false
     fi
 
-    case "$TARGET" in
-      *:*) TARGET_FULL="$TARGET" ;;
-      *) TARGET_FULL="${TARGET}:443" ;;
-    esac
+    if [ "$VLESS_ENABLED" = true ]; then
+      case "$TARGET" in
+        *:*) TARGET_FULL="$TARGET" ;;
+        *) TARGET_FULL="${TARGET}:443" ;;
+      esac
+    fi
+
+    VLESS_INBOUND=""
+    if [ "$VLESS_ENABLED" = true ]; then
+      VLESS_INBOUND="{
+      \"protocol\": \"vless\",
+      \"port\": $PORT,
+      \"tag\": \"reality\",
+      \"settings\": {
+        \"users\": [{\"id\": \"$UUID\", \"email\": \"MasterUser\", \"flow\": \"xtls-rprx-vision\"}],
+        \"decryption\": \"none\"
+      },
+      \"streamSettings\": {
+        \"security\": \"reality\",
+        \"realitySettings\": {
+          \"show\": true, \"target\": \"$TARGET_FULL\", \"serverNames\": [\"$REALITY_DOMAIN\"],
+          \"privateKey\": \"$PRIVATE_KEY\", \"minClientVer\": \"1.1.1\", \"shortIds\": [\"22\"]
+        }
+      }
+    }"
+    fi
 
     SS_INBOUND=""
     if [ "$SS_ENABLED" = true ]; then
-      SS_INBOUND=",
-    {
+      if [ "$VLESS_ENABLED" = true ]; then
+        SS_INBOUND=",
+    "
+      else
+        SS_INBOUND=""
+      fi
+    SS_INBOUND="${SS_INBOUND}{
       \"listen\": \"::\",
       \"port\": $SS_PORT,
       \"tag\": \"ss-in\",
@@ -163,36 +199,7 @@ configure() {
     "error": "/var/log/xray/error.log"
   },
   "inbounds": [
-    {
-      "protocol": "vless",
-      "port": $PORT,
-      "tag": "reality",
-      "settings": {
-        "users": [
-          {
-            "id": "$UUID",
-            "email": "MasterUser",
-            "flow": "xtls-rprx-vision"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "security": "reality",
-        "realitySettings": {
-          "show": true,
-          "target": "$TARGET_FULL",
-          "serverNames": [
-            "$REALITY_DOMAIN"
-          ],
-          "privateKey": "$PRIVATE_KEY",
-          "minClientVer": "1.1.1",
-          "shortIds": [
-            "22"
-          ]
-        }
-      }
-    }$SS_INBOUND
+    $VLESS_INBOUND$SS_INBOUND
   ],
   "outbounds": [
     {
@@ -202,8 +209,11 @@ configure() {
 }
 EOF
 
-    VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${REALITY_DOMAIN}&sid=22&flow=xtls-rprx-vision#VLESS-REALITY"
-    echo "$VLESS_LINK" | $SUDO tee /etc/xray/vless_link.txt >/dev/null
+    $SUDO rm -f /etc/xray/vless_link.txt
+    if [ "$VLESS_ENABLED" = true ]; then
+      VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${REALITY_DOMAIN}&sid=22&flow=xtls-rprx-vision#VLESS-REALITY"
+      echo "$VLESS_LINK" | $SUDO tee /etc/xray/vless_link.txt >/dev/null
+    fi
   fi
 
   $SUDO rc-service xray restart 2>/dev/null || $SUDO rc-service xray start 2>/dev/null || true
