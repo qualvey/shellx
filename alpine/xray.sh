@@ -110,17 +110,50 @@ configure() {
         PRIVATE_KEY="$PRIVATE_KEY_INPUT"
         read -p "请输入对应的 Public Key: " PUBLIC_KEY
       fi
+
+      read -p "请输入 Shadowsocks 服务端口（留空禁用）: " SS_PORT_INPUT
+      SS_ENABLED=false
+      if [ -n "$SS_PORT_INPUT" ]; then
+        SS_ENABLED=true
+        SS_PORT=$(echo "$SS_PORT_INPUT" | xargs)
+        read -p "请输入 Shadowsocks 密码（留空自动生成）: " SS_PASSWORD
+        if [ -z "$SS_PASSWORD" ]; then
+          SS_PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
+          [ -z "$SS_PASSWORD" ] && SS_PASSWORD="SecretPass8JCs"
+        fi
+        SS_PASSWORD=$(echo "$SS_PASSWORD" | xargs)
+      fi
     else
       PORT=443
       UUID="$GEN_UUID"
       TARGET="www.apple.com"
       REALITY_DOMAIN="www.apple.com"
+      SS_ENABLED=false
     fi
 
     case "$TARGET" in
       *:*) TARGET_FULL="$TARGET" ;;
       *) TARGET_FULL="${TARGET}:443" ;;
     esac
+
+    SS_INBOUND=""
+    if [ "$SS_ENABLED" = true ]; then
+      SS_INBOUND=",
+    {
+      \"listen\": \"::\",
+      \"port\": $SS_PORT,
+      \"tag\": \"ss-in\",
+      \"sniffing\": {
+        \"enabled\": true
+      },
+      \"protocol\": \"shadowsocks\",
+      \"settings\": {
+        \"network\": \"tcp,udp\",
+        \"method\": \"chacha20-ietf-poly1305\",
+        \"password\": \"$SS_PASSWORD\"
+      }
+    }"
+    fi
 
     cat <<EOF | $SUDO tee /etc/xray/config.json >/dev/null
 {
@@ -159,7 +192,7 @@ configure() {
           ]
         }
       }
-    }
+    }$SS_INBOUND
   ],
   "outbounds": [
     {
@@ -182,6 +215,11 @@ EOF
   echo "=========================================="
   echo "Xray 配置完成!"
   echo "配置路径: /etc/xray/config.json"
+  if [ "${SS_ENABLED:-false}" = true ]; then
+    echo "Shadowsocks 端口: $SS_PORT"
+    echo "Shadowsocks 加密: chacha20-ietf-poly1305"
+    echo "Shadowsocks 密码: $SS_PASSWORD"
+  fi
   if [ -n "${VLESS_LINK:-}" ]; then
     echo ""
     echo "客户端 VLESS 链接:"
@@ -190,6 +228,16 @@ EOF
   echo "=========================================="
 }
 
+shadowsocks() {
+  if command -v xray >/dev/null 2>&1; then
+    echo "检测到 Xray 已安装，跳过 Shadowsocks 安装。"
+    return 0
+  fi
+
+  echo "正在安装 Shadowsocks..."
+  $SUDO apk add --no-cache shadowsocks-libev
+  echo "Shadowsocks 安装完成。"
+}
 main() {
   if command -v xray >/dev/null 2>&1; then
     CURRENT_VERSION=$(xray version 2>&1 | awk '/Xray/{print $2}' || true)
