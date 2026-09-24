@@ -9,6 +9,33 @@ else
   SUDO=""
 fi
 
+# Xray 下载、解压和配置所需的依赖。脚本可能通过 wget 下载执行，
+# 因此缺少 curl 时也应能自行安装，而不是在后续步骤才失败。
+DEPENDENCIES="curl wget unzip"
+
+check_dependencies() {
+  missing=""
+  for cmd in $DEPENDENCIES; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      echo "依赖已安装: $cmd"
+    else
+      echo "缺少依赖: $cmd"
+      missing="$missing $cmd"
+    fi
+  done
+
+  if [ -n "$missing" ]; then
+    if ! command -v apk >/dev/null 2>&1; then
+      echo "无法自动安装依赖：未检测到 apk，请手动安装:$missing" >&2
+      return 1
+    fi
+
+    echo "正在安装缺少的依赖:$missing"
+    # apk 软件包名与命令名一致（unzip 除外时仍保持相同名称）。
+    $SUDO apk add --no-cache $missing
+  fi
+}
+
 # 生成 128 bit 随机密码。优先使用 OpenSSL，缺少 OpenSSL 时使用内核
 # CSPRNG（/dev/urandom）；不使用可预测的固定回退值。
 generate_password() {
@@ -266,6 +293,8 @@ shadowsocks() {
   echo "Shadowsocks 安装完成。"
 }
 main() {
+  check_dependencies
+
   if command -v xray >/dev/null 2>&1; then
     CURRENT_VERSION=$(xray version 2>&1 | awk '/Xray/{print $2}' || true)
     echo "当前 Xray 版本: $CURRENT_VERSION"
