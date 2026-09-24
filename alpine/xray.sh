@@ -9,6 +9,19 @@ else
   SUDO=""
 fi
 
+# 生成 128 bit 随机密码。优先使用 OpenSSL，缺少 OpenSSL 时使用内核
+# CSPRNG（/dev/urandom）；不使用可预测的固定回退值。
+generate_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  elif command -v od >/dev/null 2>&1 && [ -r /dev/urandom ]; then
+    od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-32
+  else
+    echo "无法生成安全随机密码：缺少 openssl、od 或 /dev/urandom" >&2
+    return 1
+  fi
+}
+
 install_xray() {
   arch_raw=$(uname -m)
   case "$arch_raw" in
@@ -125,11 +138,13 @@ configure() {
         SS_ENABLED=true
         SS_PORT=$(echo "$SS_PORT_INPUT" | xargs)
         read -p "请输入 Shadowsocks 密码（留空自动生成）: " SS_PASSWORD
+        SS_PASSWORD=$(printf '%s' "$SS_PASSWORD" | tr -d '\r\n')
         if [ -z "$SS_PASSWORD" ]; then
-          SS_PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
-          [ -z "$SS_PASSWORD" ] && SS_PASSWORD="SecretPass8JCs"
+          SS_PASSWORD=$(generate_password)
+        elif ! printf '%s' "$SS_PASSWORD" | grep -Eq '^[A-Za-z0-9._~-]{16,}$'; then
+          echo "密码必须至少 16 位，且只能包含字母、数字、点、下划线、波浪线或连字符。" >&2
+          return 1
         fi
-        SS_PASSWORD=$(echo "$SS_PASSWORD" | xargs)
       fi
     else
       PORT=443
@@ -208,11 +223,13 @@ configure() {
   ]
 }
 EOF
+    $SUDO chmod 600 /etc/xray/config.json
 
     $SUDO rm -f /etc/xray/vless_link.txt
     if [ "$VLESS_ENABLED" = true ]; then
       VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${REALITY_DOMAIN}&sid=22&flow=xtls-rprx-vision#VLESS-REALITY"
       echo "$VLESS_LINK" | $SUDO tee /etc/xray/vless_link.txt >/dev/null
+      $SUDO chmod 600 /etc/xray/vless_link.txt
     fi
   fi
 

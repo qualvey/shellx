@@ -11,6 +11,17 @@ if command -v sudo >/dev/null 2>&1; then
 else
   SUDO=""
 fi
+
+generate_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  elif command -v od >/dev/null 2>&1 && [ -r /dev/urandom ]; then
+    od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-32
+  else
+    echo "无法生成安全随机密码：缺少 openssl、od 或 /dev/urandom" >&2
+    return 1
+  fi
+}
 DEPENDENCIES="curl jq"
 
 ALL_DEPS_INSTALLED=true
@@ -117,10 +128,7 @@ if [ -t 0 ]; then
     echo "Shadowsocks will be enabled on port $PORT"
     read -p "Shadowsocks password (Leave empty to auto-generate): " PASSWORD
     if [ -z "$PASSWORD" ]; then
-      PASSWORD=$(head -c 16 /dev/urandom | base64 2>/dev/null | tr -d '\n/' | cut -c1-16)
-      if [ -z "$PASSWORD" ]; then
-        PASSWORD="SecretPass8JCs"
-      fi
+      PASSWORD=$(generate_password)
     fi
     PORT=$(echo "$PORT" | xargs)
     PASSWORD=$(echo "$PASSWORD" | xargs)
@@ -165,8 +173,7 @@ if [ -t 0 ] && { [ "$ENABLE_TUIC" = "y" ] || [ "$ENABLE_TUIC" = "Y" ]; }; then
 
   read -p "tuic password (leave empty to auto-generate): " TUIC_PASSWORD
   if [ -z "$TUIC_PASSWORD" ]; then
-    TUIC_PASSWORD=$(head -c 32 /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 16)
-    [ -z "$TUIC_PASSWORD" ] && TUIC_PASSWORD="SecretTUICPass8JCs"
+    TUIC_PASSWORD=$(generate_password)
   fi
 
 
