@@ -10,6 +10,37 @@ die() {
     exit 1
 }
 
+run_as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        die "安装依赖需要 root 权限或 sudo"
+    fi
+}
+
+install_curl() {
+    echo "未检测到 curl，正在探测包管理器并安装..."
+
+    if command -v apk >/dev/null 2>&1; then
+        run_as_root apk add --no-cache curl
+    elif command -v apt-get >/dev/null 2>&1; then
+        run_as_root apt-get update
+        run_as_root apt-get install -y curl
+    elif command -v dnf >/dev/null 2>&1; then
+        run_as_root dnf install -y curl
+    elif command -v yum >/dev/null 2>&1; then
+        run_as_root yum install -y curl
+    elif command -v pacman >/dev/null 2>&1; then
+        run_as_root pacman -Sy --noconfirm curl
+    elif command -v zypper >/dev/null 2>&1; then
+        run_as_root zypper --non-interactive install curl
+    else
+        die "未找到支持的包管理器（需要 apk、apt-get、dnf、yum、pacman 或 zypper）"
+    fi
+}
+
 command -v uname >/dev/null 2>&1 || die "未找到 uname"
 
 ARCH=$(uname -m)
@@ -45,12 +76,17 @@ fi
 
 command -v "$RUNNER" >/dev/null 2>&1 || die "未找到执行环境：$RUNNER"
 
+if ! command -v curl >/dev/null 2>&1; then
+    install_curl
+fi
+
 if command -v curl >/dev/null 2>&1; then
     FETCH="curl -fsSL"
 elif command -v wget >/dev/null 2>&1; then
+    # 包管理器安装失败但系统已有 wget 时，仍允许继续执行。
     FETCH="wget -qO-"
 else
-    die "需要 curl 或 wget 才能下载远程脚本"
+    die "安装 curl 后仍未找到 curl 或 wget，无法下载远程脚本"
 fi
 
 TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t shellx-xray)
