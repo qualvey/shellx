@@ -46,7 +46,7 @@ install() {
   }
 
   echo "正在通过 Xray 官方安装脚本安装/更新 Xray..."
-  $SUDO bash -c "\$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+  $SUDO bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
   $SUDO mkdir -p /etc/xray /var/log/xray
 
