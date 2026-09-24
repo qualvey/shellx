@@ -12,7 +12,6 @@ source /etc/os-release
 # 全局变量定义
 SSHD_CONFIG="/etc/ssh/sshd_config"
 USERNAME="user"
-DEFAULT_PASSWD="passwd"
 PubKey='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGa7/v6kzOZ1uLfMQWFruonAHpMSJvYnRwtSIySo6DVy wel@ryugo.org'
 
 case "$ID" in
@@ -76,7 +75,8 @@ else
     else
         useradd -m -s /bin/bash "$USERNAME"
     fi
-    echo "${USERNAME}:${DEFAULT_PASSWD}" | chpasswd
+    # 仅使用 SSH 公钥登录，不设置可猜测的默认密码。
+    passwd -l "$USERNAME" >/dev/null 2>&1 || true
     echo "✅ 用户 '$USERNAME' 创建成功"
 fi
 
