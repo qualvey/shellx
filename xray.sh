@@ -2,8 +2,8 @@
 set -eu
 
 # 统一入口只负责分发，不包含 Xray 的安装逻辑。
-# 使用不可变 commit，避免远程 master 变化导致脚本行为漂移。
-BASE_URL="https://raw.githubusercontent.com/qualvey/shellx/f4c2802fc88aa252564a2dfa1a2d7ce092045e4c"
+# 当前各平台脚本位于 master；完成版本提交后应改为对应的不可变 commit。
+BASE_URL="https://raw.githubusercontent.com/qualvey/shellx/master"
 
 die() {
     echo "错误：$*" >&2
