@@ -61,7 +61,7 @@ configure() {
   if [ -f "$CONFIG_PATH" ] && [ -t 0 ]; then
     read -p "检测到已有配置文件 $CONFIG_PATH，是否重新配置？[y/N]: " RECONF_INPUT
     case "$RECONF_INPUT" in
-      [yY]|[yY][eE][sS]) $SUDO rm -f "$CONFIG_PATH" ;;
+      [yY]|[yY][eE][sS]) $SUDO cp "$CONFIG_PATH" "${CONFIG_PATH}.backup" && $SUDO rm -f "$CONFIG_PATH" ;;
       *) ;;
     esac
   fi
@@ -69,6 +69,7 @@ configure() {
   if [ ! -f "$CONFIG_PATH" ]; then
     $SUDO mkdir -p "$(dirname "$CONFIG_PATH")"
     $SUDO touch "$CONFIG_PATH"
+    $SUDO chown -R nobody:nogroup $(dirname "$CONFIG_PATH")
     GEN_UUID=$(/usr/local/bin/xray uuid 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || true)
     if [ -z "$GEN_UUID" ]; then
       GEN_UUID=$(hexdump -n 16 -e '4/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 6/1 "%02x"' /dev/urandom 2>/dev/null || echo "c2f9d863-8a3c-4e8a-9f12-0b1a2c3d4e5f")
