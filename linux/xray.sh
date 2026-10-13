@@ -46,35 +46,8 @@ install() {
   }
 
   echo "正在通过 Xray 官方安装脚本安装/更新 Xray..."
+  # 官方脚本同时会安装systemd service
   $SUDO bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-
-  $SUDO mkdir -p /etc/xray /var/log/xray
-
-  # 官方安装脚本会安装二进制文件；服务配置在这里统一为本项目的目录结构。
-  cat <<'EOF' | $SUDO tee /etc/systemd/system/xray.service >/dev/null
-[Unit]
-Description=Xray Service
-Documentation=https://github.com/XTLS/Xray-core
-After=network-online.target nss-lookup.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/etc/xray
-ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
-Restart=on-failure
-RestartSec=2
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  $SUDO systemctl daemon-reload
-  $SUDO systemctl enable xray.service >/dev/null
-
-  echo "Xray 安装完成。"
-}
 
 configure() {
   if ! command -v xray >/dev/null 2>&1; then
@@ -225,8 +198,8 @@ configure() {
 {
   "log": {
     "loglevel": "warning",
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log"
+    "access": "/var/log/xray/xray.log",
+    "error": "/var/log/xray/xray.log"
   },
   "inbounds": [
     $VLESS_INBOUND$SS_INBOUND
