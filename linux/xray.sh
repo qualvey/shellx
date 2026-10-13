@@ -48,7 +48,7 @@ install() {
   echo "正在通过 Xray 官方安装脚本安装/更新 Xray..."
   # 官方脚本同时会安装systemd service
   $SUDO bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-
+}
 configure() {
   if ! command -v xray >/dev/null 2>&1; then
     echo "未检测到 Xray，先执行 install() 后再配置。"
@@ -277,4 +277,3 @@ main() {
 }
 
 main "$@"
-

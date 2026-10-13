@@ -237,8 +237,8 @@ configure() {
 {
   "log": {
     "loglevel": "warning",
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log"
+    "access": "/var/log/xray/xray.log",
+    "error": "/var/log/xray/xray.log"
   },
   "inbounds": [
     $VLESS_INBOUND$SS_INBOUND
