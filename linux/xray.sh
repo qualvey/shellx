@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
+CONFIG_PATH="/usr/local/etc/xray/config.json"
 # sudo 自动检测
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
@@ -57,16 +58,17 @@ configure() {
 
   SERVER_IP=$(curl -s4 --max-time 5 https://api.ipify.org || curl -s4 --max-time 5 https://ifconfig.me || wget -qO- -t 1 -T 5 https://api.ipify.org 2>/dev/null || echo "YOUR_SERVER_IP")
 
-  if [ -f /etc/xray/config.json ] && [ -t 0 ]; then
-    read -p "检测到已有配置文件 /etc/xray/config.json，是否重新配置？[y/N]: " RECONF_INPUT
+  if [ -f "$CONFIG_PATH" ] && [ -t 0 ]; then
+    read -p "检测到已有配置文件 $CONFIG_PATH，是否重新配置？[y/N]: " RECONF_INPUT
     case "$RECONF_INPUT" in
-      [yY]|[yY][eE][sS]) $SUDO rm -f /etc/xray/config.json ;;
+      [yY]|[yY][eE][sS]) $SUDO rm -f "$CONFIG_PATH" ;;
       *) ;;
     esac
   fi
 
-  if [ ! -f /etc/xray/config.json ]; then
-    $SUDO mkdir -p /etc/xray
+  if [ ! -f "$CONFIG_PATH" ]; then
+    $SUDO mkdir -p "$(dirname "$CONFIG_PATH")"
+    $SUDO touch "$CONFIG_PATH"
     GEN_UUID=$(/usr/local/bin/xray uuid 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || true)
     if [ -z "$GEN_UUID" ]; then
       GEN_UUID=$(hexdump -n 16 -e '4/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 6/1 "%02x"' /dev/urandom 2>/dev/null || echo "c2f9d863-8a3c-4e8a-9f12-0b1a2c3d4e5f")
@@ -195,7 +197,7 @@ configure() {
     }"
     fi
 
-    cat <<EOF | $SUDO tee /etc/xray/config.json >/dev/null
+    cat <<EOF | $SUDO tee "$CONFIG_PATH" >/dev/null
 {
   "log": {
     "loglevel": "warning",
@@ -212,26 +214,26 @@ configure() {
   ]
 }
 EOF
-    $SUDO chmod 600 /etc/xray/config.json
+    $SUDO chmod 600 "$CONFIG_PATH"
 
-    $SUDO rm -f /etc/xray/vless_link.txt
+    $SUDO rm -f "$CONFIG_PATH.vless_link.txt"
     if [ "$VLESS_ENABLED" = true ]; then
       VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${REALITY_DOMAIN}&sid=22&flow=xtls-rprx-vision#VLESS-REALITY"
-      echo "$VLESS_LINK" | $SUDO tee /etc/xray/vless_link.txt >/dev/null
-      $SUDO chmod 600 /etc/xray/vless_link.txt
+      echo "$VLESS_LINK" | $SUDO tee "$CONFIG_PATH.vless_link.txt" >/dev/null
+      $SUDO chmod 600 "$CONFIG_PATH.vless_link.txt"
     fi
   fi
 
   $SUDO systemctl daemon-reload
   $SUDO systemctl restart xray.service 2>/dev/null || $SUDO systemctl start xray.service
 
-  if [ -f /etc/xray/vless_link.txt ]; then
-    VLESS_LINK=$($SUDO cat /etc/xray/vless_link.txt)
+  if [ -f "$CONFIG_PATH.vless_link.txt" ]; then
+    VLESS_LINK=$($SUDO cat "$CONFIG_PATH.vless_link.txt")
   fi
 
   echo "=========================================="
   echo "Xray 安装与服务配置完成!"
-  echo "配置路径: /etc/xray/config.json"
+  echo "配置路径: $CONFIG_PATH"
   if [ "${SS_ENABLED:-false}" = true ]; then
     echo "Shadowsocks 端口: $SS_PORT"
     echo "Shadowsocks 加密: chacha20-ietf-poly1305"
