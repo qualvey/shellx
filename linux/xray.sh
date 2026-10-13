@@ -2,6 +2,7 @@
 set -eu
 
 CONFIG_PATH="/usr/local/etc/xray/config.json"
+LOG_PATH="/var/log/xray/xray.log"
 # sudo 自动检测
 if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
@@ -70,6 +71,7 @@ configure() {
     $SUDO mkdir -p "$(dirname "$CONFIG_PATH")"
     $SUDO touch "$CONFIG_PATH"
     $SUDO chown -R nobody:nogroup $(dirname "$CONFIG_PATH")
+    $SUDO chown -R nobody:nogroup "(dirname "$LOG_PATH")"
     GEN_UUID=$(/usr/local/bin/xray uuid 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || true)
     if [ -z "$GEN_UUID" ]; then
       GEN_UUID=$(hexdump -n 16 -e '4/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 2/1 "%02x" "-" 6/1 "%02x"' /dev/urandom 2>/dev/null || echo "c2f9d863-8a3c-4e8a-9f12-0b1a2c3d4e5f")
